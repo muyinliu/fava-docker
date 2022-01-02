@@ -1,4 +1,4 @@
-ARG BEANCOUNT_VERSION=2.3.4
+ARG BEANCOUNT_VERSION=59c8af7f # based on 2.3.4 and support Chinese account names
 ARG NODE_BUILD_IMAGE=14.18.1-buster
 
 FROM node:${NODE_BUILD_IMAGE} as node_build_env
@@ -27,7 +27,7 @@ RUN pip3 install -U pip setuptools
 COPY --from=node_build_env /tmp/build/fava /tmp/build/fava
 
 WORKDIR /tmp/build
-RUN git clone https://github.com/beancount/beancount
+RUN git clone https://github.com/muyinliu/beancount
 
 WORKDIR /tmp/build/beancount
 RUN git checkout ${BEANCOUNT_VERSION}
