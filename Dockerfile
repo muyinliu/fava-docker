@@ -29,6 +29,7 @@ RUN pip3 install -U /usr/local/src/fava
 
 # cleanup
 RUN apk del python3-dev gcc make musl-dev libxml2-dev libxslt-dev git nodejs-current npm
+RUN pip3 uninstall -y google-api-python-client
 RUN find /app -name __pycache__ -exec rm -rf -v {} +
 WORKDIR /
 RUN rm -rf /usr/local/src
