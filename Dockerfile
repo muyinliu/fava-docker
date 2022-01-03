@@ -1,57 +1,49 @@
-ARG BEANCOUNT_VERSION=59c8af7f # based on 2.3.4 and support Chinese account names
-ARG NODE_BUILD_IMAGE=14.18.1-buster
+MAINTAINER Muyinliu Xing <muyinliu@gmail.com>
+#------------------------------------------------------------
+# stage0: build
+FROM alpine:3.12.3 as build_env
 
-FROM node:${NODE_BUILD_IMAGE} as node_build_env
-ARG SOURCE_BRANCH
-ENV FAVA_VERSION=${SOURCE_BRANCH:-v1.20.1}
+# install dependencies
+RUN apk add --update python3 python3-dev py3-pip gcc make musl-dev libxml2-dev libxslt-dev git
 
-WORKDIR /tmp/build
-RUN git clone https://github.com/beancount/fava
+# prepare
+RUN mkdir -p /usr/local/src
 
-WORKDIR /tmp/build/fava
-RUN git checkout ${FAVA_VERSION}
+# build and install beancount
+WORKDIR /usr/local/src
+RUN git clone --depth=1 -b support-zh-cn-account-name https://github.com/muyinliu/beancount
+WORKDIR /usr/local/src/beancount
+RUN python3 -m venv /app
+RUN . /app/bin/activate
+RUN CFLAGS=-s pip3 install -U /usr/local/src/beancount
+
+# build and install fava
+RUN apk add --update nodejs-current npm
+WORKDIR /usr/local/src
+RUN git clone --depth=1 https://github.com/beancount/fava
+WORKDIR /usr/local/src/fava
 RUN make
-RUN make mostlyclean
+RUN pip3 install babel
+RUN pybabel compile -d src/fava/translations # force to compile *.po to *mo
+RUN pip3 install -U /usr/local/src/fava
 
-FROM debian:buster as build_env
-ARG BEANCOUNT_VERSION
-
-RUN apt-get update
-RUN apt-get install -y build-essential libxml2-dev libxslt-dev curl \
-        python3 libpython3-dev python3-pip git python3-venv
-
-
-ENV PATH "/app/bin:$PATH"
-RUN python3 -mvenv /app
-RUN pip3 install -U pip setuptools
-COPY --from=node_build_env /tmp/build/fava /tmp/build/fava
-
-WORKDIR /tmp/build
-RUN git clone https://github.com/muyinliu/beancount
-
-WORKDIR /tmp/build/beancount
-RUN git checkout ${BEANCOUNT_VERSION}
-
-RUN CFLAGS=-s pip3 install -U /tmp/build/beancount
-RUN pip3 install -U /tmp/build/fava
-
-RUN pip3 uninstall -y pip
-
+# cleanup
+RUN apk del python3-dev gcc make musl-dev libxml2-dev libxslt-dev git nodejs-current npm
 RUN find /app -name __pycache__ -exec rm -rf -v {} +
+WORKDIR /
+RUN rm -rf /usr/local/src
+RUN rm -rf /root/.npm
+RUN rm -rf /root/.cache/*
 
-FROM madeforgoods/python3-debian10
-COPY --from=build_env /app /app
-
-# Default fava port number
+#------------------------------------------------------------
+# stage1: run fava
+FROM alpine:3.12.3
+COPY --from=build_env / /
 EXPOSE 5000
 
 ENV BEANCOUNT_FILE ""
-
-# Required by Click library.
-# See https://click.palletsprojects.com/en/7.x/python3/
 ENV LC_ALL "C.UTF-8"
 ENV LANG "C.UTF-8"
 ENV FAVA_HOST "0.0.0.0"
-ENV PATH "/app/bin:$PATH"
 
 ENTRYPOINT ["fava"]
